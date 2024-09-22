@@ -18,5 +18,7 @@ How To Play:
 
 Sources: (TODO: list a source URL for any assets you did not create yourself. Make sure you have a license for the asset.)
 
+- Open Sans font: https://fonts.google.com/specimen/Open+Sans
+
 This game was built with [NEST](NEST.md).
 

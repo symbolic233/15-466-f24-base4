@@ -28,16 +28,18 @@
 #define FONT_SIZE 20
 #define MARGIN (FONT_SIZE * .5)
 #define RESCALE 64
+#define MAX_LINE_LENGTH 75
+#define LINE_HEIGHT 30
 
 GLuint camera_mesh_program = 0;
 Load< MeshBuffer > camera_mesh(LoadTagDefault, []() -> MeshBuffer const * {
-	MeshBuffer const *ret = new MeshBuffer(data_path("hexapod.pnct"));
+	MeshBuffer const *ret = new MeshBuffer(data_path("scene-bg.pnct"));
 	camera_mesh_program = ret->make_vao_for_program(lit_color_texture_program->program);
 	return ret;
 });
 
 Load< Scene > camera_scene(LoadTagDefault, []() -> Scene const * {
-	return new Scene(data_path("hexapod.scene"), [&](Scene &scene, Scene::Transform *transform, std::string const &mesh_name){
+	return new Scene(data_path("scene-bg.scene"), [&](Scene &scene, Scene::Transform *transform, std::string const &mesh_name){
 		Mesh const &mesh = camera_mesh->lookup(mesh_name);
 
 		scene.drawables.emplace_back(transform);
@@ -222,6 +224,19 @@ void PlayMode::draw_text_line(std::string text, float x, float y, glm::vec3 colo
 	glUseProgram(0); // so we can draw other stuff
 }
 
+void PlayMode::draw_text_par(std::string text, float x, float y, glm::vec3 color) {
+	uint32_t i = 0;
+	uint32_t lnum = 0;
+	while (i < text.length()) {
+		uint32_t length = MAX_LINE_LENGTH;
+		while (i + length < text.length() && text[i + length] != ' ') length--;
+		std::string line = text.substr(i, length);
+		draw_text_line(line, x, y - lnum * (float)LINE_HEIGHT, color);
+		i += length + 1; // skip the space
+		lnum++;
+	}
+}
+
 PlayMode::PlayMode() : scene(*camera_scene) {
 
 	//get pointer to camera for convenience:
@@ -238,7 +253,7 @@ PlayMode::PlayMode() : scene(*camera_scene) {
 	set_to_screen = glm::ortho(0.0f, 960.0f, 0.0f, 540.0f);
 
 	// Do some font setup
-	fontfile = data_path("opensans-regular.ttf");
+	fontfile = data_path("OpenSans-Regular.ttf");
 
 	FT_Init_FreeType(&ft_library);
 	if ((FT_New_Face(ft_library, fontfile.c_str(), 0, &ft_face))) {
@@ -304,27 +319,7 @@ bool PlayMode::handle_event(SDL_Event const &evt, glm::uvec2 const &window_size)
 
 void PlayMode::update(float elapsed) {
 
-	//move camera:
-	{
-
-		//combine inputs into a move:
-		constexpr float PlayerSpeed = 30.0f;
-		glm::vec2 move = glm::vec2(0.0f);
-		if (left.pressed && !right.pressed) move.x =-1.0f;
-		if (!left.pressed && right.pressed) move.x = 1.0f;
-		if (down.pressed && !up.pressed) move.y =-1.0f;
-		if (!down.pressed && up.pressed) move.y = 1.0f;
-
-		//make it so that moving diagonally doesn't go faster:
-		if (move != glm::vec2(0.0f)) move = glm::normalize(move) * PlayerSpeed * elapsed;
-
-		glm::mat4x3 frame = camera->transform->make_local_to_parent();
-		glm::vec3 frame_right = frame[0];
-		//glm::vec3 up = frame[1];
-		glm::vec3 frame_forward = -frame[2];
-
-		camera->transform->position += move.x * frame_right + move.y * frame_forward;
-	}
+	if (current_state.upper) apply_state(current_state.next[0]); // don't prompt upper text
 
 	//reset button press counters:
 	left.downs = 0;
@@ -340,6 +335,9 @@ void PlayMode::draw(glm::uvec2 const &drawable_size) {
 	camera->aspect = float(drawable_size.x) / float(drawable_size.y);
 
 	glUseProgram(lit_color_texture_program->program);
+	glUniform1i(lit_color_texture_program->LIGHT_TYPE_int, 1);
+	glUniform3fv(lit_color_texture_program->LIGHT_DIRECTION_vec3, 1, glm::value_ptr(glm::vec3(0.0f, 0.0f,-1.0f)));
+	glUniform3fv(lit_color_texture_program->LIGHT_ENERGY_vec3, 1, glm::value_ptr(glm::vec3(1.0f, 1.0f, 0.95f)));
 	glUseProgram(0);
 
 	glClearColor(0.5f, 0.5f, 0.5f, 1.0f);
@@ -350,7 +348,7 @@ void PlayMode::draw(glm::uvec2 const &drawable_size) {
 	glDepthFunc(GL_LESS); //this is the default depth comparison function, but FYI you can change it.
 
 	scene.draw(*camera);
-	draw_text_line(upper_text, 10.0f, 360.0f, glm::vec3{0.0f, 0.0f, 1.0f});
-	draw_text_line(lower_text, 10.0f, 180.0f, glm::vec3{});
+	draw_text_par(upper_text, 10.0f, 360.0f, glm::vec3{0.0f, 0.0f, 1.0f});
+	draw_text_par(lower_text, 10.0f, 180.0f, glm::vec3{});
 	GL_ERRORS();
 }

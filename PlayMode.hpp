@@ -53,6 +53,7 @@ struct PlayMode : Mode {
 	hb_font_t *hb_font;
 
 	void draw_text_line(std::string text, float x, float y, glm::vec3 color);
+	void draw_text_par(std::string text, float x, float y, glm::vec3 color);
 
 	std::string upper_text;
 	std::string lower_text;

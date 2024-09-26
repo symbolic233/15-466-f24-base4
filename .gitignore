@@ -19,3 +19,4 @@ scenes/show-scene*
 maek-cache.json
 .vscode/
 *.dll
+*.sh

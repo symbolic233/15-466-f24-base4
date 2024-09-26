@@ -16,7 +16,7 @@ Choices: The script is stored in a text file. If I had more time, I could've tur
 
 The script file alternates lines. The odd lines have three or more numbers. The first is a line index. The second tells you what line(s) you might have next, which could be 1 or more. If that number is greater than 1, then we have a choice. The third and so forth numbers tell us which line(s) to jump to next. This is how choices are implemented; the game will know what lines could have choices and act accordingly. The advantage of this system is that you can jump anywhere, including to a previous line, which is what allows me to loop the script.
 
-Lastly, if there is an extra number at the end, this tells us where to place the text. Another nice script feature allows placing text on the upper or lower level of the screen.
+Lastly, if there is an extra number at the end, this tells us where to place the text. Another nice script feature allows placing text on the upper or lower level of the screen. The even lines have the actual text content.
 
 Screen Shot:
 

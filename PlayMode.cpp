@@ -165,10 +165,8 @@ void PlayMode::draw_text_line(std::string text, float x, float y, glm::vec3 colo
 	}
 
 	// I don't need absolute positions, so we ignore that part of the HB/FT tutorial.
-
 	hb_buffer_destroy(buf);
 	
-
 	// Draw the text.
 	glUseProgram(text_program->program);
 
@@ -182,8 +180,7 @@ void PlayMode::draw_text_line(std::string text, float x, float y, glm::vec3 colo
 	float scale = 1.0f;
 	glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
     for (Character ch: text_characters) {
-        float xpos = x - ch.offset.x * scale;
-		// std::cout << (float)ch.size.y << " " << ch.offset.y << std::endl;
+        float xpos = x + ch.offset.x * scale;
         float ypos = y + ch.offset.y * scale;
 
         float w = ch.size.x * scale;

@@ -21,8 +21,11 @@
 
 #include <iostream>
 #include <string>
+#include <fstream>
+#include <sstream>
+#include <map>
 
-#define FONT_SIZE 36
+#define FONT_SIZE 20
 #define MARGIN (FONT_SIZE * .5)
 #define RESCALE 64
 
@@ -54,14 +57,48 @@ Load< Sound::Sample > rocket_sample(LoadTagDefault, []() -> Sound::Sample const 
 	return new Sound::Sample(data_path("rocket.wav"));
 });
 
-void PlayMode::draw_text_line(glm::vec3 color) {
+Load<std::map<uint32_t, PlayMode::TextState>> script_lines(LoadTagDefault, []() -> std::map<uint32_t, PlayMode::TextState> const * {
+	// Some file reading taken from https://stackoverflow.com/questions/7868936/read-file-line-by-line-using-ifstream-in-c
+	std::map<uint32_t, PlayMode::TextState> script;
+	
+	uint32_t lnum = 1;
+    std::ifstream infile(data_path("script.txt"));
+	std::string line;
+	PlayMode::TextState state;
+	while (std::getline(infile, line)) {
+		if (lnum % 2 == 1) {
+			// jump condition line
+			std::istringstream iss(line);
+			iss >> state.line >> state.choice;
+			uint32_t option;
+			for (uint32_t i = 0; i < state.choice; i++) {
+				iss >> option;
+				state.next.push_back(option);
+			}
+			iss >> state.upper; // might not go through, but it's ok
+		}
+		else {
+			state.text = line;
+			script[state.line] = state;
+			state = PlayMode::TextState();
+		}
+		lnum++;
+    }
+    return new std::map<uint32_t, PlayMode::TextState>(script);
+});
+
+void PlayMode::apply_state(uint32_t location) {
+	current_state = (*script_lines).at(location);
+	if (current_state.upper) upper_text = current_state.text;
+	else lower_text = current_state.text;
+}
+
+void PlayMode::draw_text_line(std::string text, float x, float y, glm::vec3 color) {
 	// We start by using HarfBuzz and FreeType together to shape the characters.
 	// Much of this is adapted from https://github.com/harfbuzz/harfbuzz-tutorial/blob/master/hello-harfbuzz-freetype.c
 	/* Initialize FreeType and create FreeType font face. */
 	FT_Error ft_error;
 	hb_buffer_t *buf = hb_buffer_create();
-  	std::string text;
-	text = "Sampletextpart1";
 
 
 	/* Create hb-buffer and populate. */
@@ -83,10 +120,10 @@ void PlayMode::draw_text_line(glm::vec3 color) {
 	for (unsigned int i = 0; i < len; i++) {
 		hb_codepoint_t gid   = info[i].codepoint;
 		// unsigned int cluster = info[i].cluster; // unused
-		float x_advance = pos[i].x_advance / (float)RESCALE;
-		float y_advance = pos[i].y_advance / (float)RESCALE;
-		float x_offset  = pos[i].x_offset / (float)RESCALE;
-		float y_offset  = pos[i].y_offset / (float)RESCALE;
+		float x_advance = (float)pos[i].x_advance / (float)RESCALE;
+		float y_advance = (float)pos[i].y_advance / (float)RESCALE;
+		float x_offset  = (float)pos[i].x_offset / (float)RESCALE;
+		float y_offset  = (float)pos[i].y_offset / (float)RESCALE;
 
 		// Now that we have the shapes of the characters, we have to use FT to get what the glyph looks like.
 		// Then we can use GL for the textures.
@@ -121,9 +158,9 @@ void PlayMode::draw_text_line(glm::vec3 color) {
 		// The original code takes the offset and advance from FT, but we want the HB values.
 		Character next = {
 			texture, 
-			glm::ivec2(ft_face->glyph->bitmap.width, ft_face->glyph->bitmap.rows),
-			glm::ivec2(x_offset, y_offset),
-			glm::ivec2(x_advance, y_advance)
+			glm::uvec2(ft_face->glyph->bitmap.width, ft_face->glyph->bitmap.rows),
+			glm::vec2(x_offset, y_offset),
+			glm::vec2(x_advance, y_advance)
 		};
 		text_characters.push_back(next);
 	}
@@ -138,17 +175,17 @@ void PlayMode::draw_text_line(glm::vec3 color) {
 
 	// set the angles
 	glUniform3f(glGetUniformLocation(text_program->program, "textColor"), color.x, color.y, color.z);
-	glUniformMatrix4fv(glGetUniformLocation(text_program->program, "WORLD_TO_CLIP"), 1, 0, glm::value_ptr(world_to_clip));
+	glUniformMatrix4fv(glGetUniformLocation(text_program->program, "WORLD_TO_CLIP"), 1, 0, glm::value_ptr(set_to_screen));
     glActiveTexture(GL_TEXTURE0);
     glBindVertexArray(VAO_text);
 
     // iterate through all characters
-	float x = 0.0f;
-	float y = 0.0f;
 	float scale = 1.0f;
+	glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
     for (Character ch: text_characters) {
-        float xpos = x + ch.offset.x * scale;
-        float ypos = y - (ch.size.y - ch.offset.y) * scale;
+        float xpos = x - ch.offset.x * scale;
+		// std::cout << (float)ch.size.y << " " << ch.offset.y << std::endl;
+        float ypos = y + ch.offset.y * scale;
 
         float w = ch.size.x * scale;
         float h = ch.size.y * scale;
@@ -174,7 +211,7 @@ void PlayMode::draw_text_line(glm::vec3 color) {
         glDrawArrays(GL_TRIANGLES, 0, 6);
         // now advance cursors for next glyph (note that advance was divided by rescale earlier)
         x += ch.advance.x * scale;
-		y += ch.advance.y * scale;
+		// y -= ch.advance.y * scale;
 
 		// Each time we use a texture, it's no longer used later
 		glDeleteTextures(1, &ch.id);
@@ -194,6 +231,11 @@ PlayMode::PlayMode() : scene(*camera_scene) {
 	//start music loop playing:
 	// (note: position will be over-ridden in update())
 	rocket_loop = Sound::loop(*rocket_sample, 1.0f, 0.0f);
+
+	// build_lines();
+	apply_state(1);
+
+	set_to_screen = glm::ortho(0.0f, 960.0f, 0.0f, 540.0f);
 
 	// Do some font setup
 	fontfile = data_path("opensans-regular.ttf");
@@ -236,60 +278,26 @@ PlayMode::~PlayMode() {
 
 bool PlayMode::handle_event(SDL_Event const &evt, glm::uvec2 const &window_size) {
 
-	if (evt.type == SDL_KEYDOWN) {
-		if (evt.key.keysym.sym == SDLK_ESCAPE) {
-			SDL_SetRelativeMouseMode(SDL_FALSE);
-			return true;
-		} else if (evt.key.keysym.sym == SDLK_a) {
-			left.downs += 1;
-			left.pressed = true;
-			return true;
-		} else if (evt.key.keysym.sym == SDLK_d) {
-			right.downs += 1;
-			right.pressed = true;
-			return true;
-		} else if (evt.key.keysym.sym == SDLK_w) {
-			up.downs += 1;
-			up.pressed = true;
-			return true;
-		} else if (evt.key.keysym.sym == SDLK_s) {
-			down.downs += 1;
-			down.pressed = true;
-			return true;
-		}
-	} else if (evt.type == SDL_KEYUP) {
-		if (evt.key.keysym.sym == SDLK_a) {
-			left.pressed = false;
-			return true;
-		} else if (evt.key.keysym.sym == SDLK_d) {
-			right.pressed = false;
-			return true;
-		} else if (evt.key.keysym.sym == SDLK_w) {
-			up.pressed = false;
-			return true;
-		} else if (evt.key.keysym.sym == SDLK_s) {
-			down.pressed = false;
-			return true;
-		}
-	} else if (evt.type == SDL_MOUSEBUTTONDOWN) {
-		if (SDL_GetRelativeMouseMode() == SDL_FALSE) {
-			SDL_SetRelativeMouseMode(SDL_TRUE);
-			return true;
-		}
-	} else if (evt.type == SDL_MOUSEMOTION) {
-		if (SDL_GetRelativeMouseMode() == SDL_TRUE) {
-			glm::vec2 motion = glm::vec2(
-				evt.motion.xrel / float(window_size.y),
-				-evt.motion.yrel / float(window_size.y)
-			);
-			camera->transform->rotation = glm::normalize(
-				camera->transform->rotation
-				* glm::angleAxis(-motion.x * camera->fovy, glm::vec3(0.0f, 1.0f, 0.0f))
-				* glm::angleAxis(motion.y * camera->fovy, glm::vec3(1.0f, 0.0f, 0.0f))
-			);
+	if (current_state.choice == 1) {
+		// mouse to progress
+		if (evt.type == SDL_MOUSEBUTTONDOWN) {
+			apply_state(current_state.next[0]);
 			return true;
 		}
 	}
+	else {
+		if (evt.type == SDL_KEYDOWN) {
+			uint32_t keychoice = 0;
+			if (evt.key.keysym.sym == SDLK_1) keychoice = 1;
+			if (evt.key.keysym.sym == SDLK_2) keychoice = 2;
+			if (evt.key.keysym.sym == SDLK_3) keychoice = 3;
+			if (!keychoice || (current_state.choice < keychoice)) return false;
+			apply_state(current_state.next[keychoice - 1]);
+			return true;
+		}
+	}
+
+	set_to_screen = glm::ortho(0.0f, float(window_size.x), 0.0f, float(window_size.y));
 
 	return false;
 }
@@ -342,23 +350,7 @@ void PlayMode::draw(glm::uvec2 const &drawable_size) {
 	glDepthFunc(GL_LESS); //this is the default depth comparison function, but FYI you can change it.
 
 	scene.draw(*camera);
-	draw_text_line(glm::vec3{});
-
-	{ //use DrawLines to overlay some text:
-		glDisable(GL_DEPTH_TEST);
-		float aspect = float(drawable_size.x) / float(drawable_size.y);
-		DrawLines lines(glm::mat4(
-			1.0f / aspect, 0.0f, 0.0f, 0.0f,
-			0.0f, 1.0f, 0.0f, 0.0f,
-			0.0f, 0.0f, 1.0f, 0.0f,
-			0.0f, 0.0f, 0.0f, 1.0f
-		));
-
-		constexpr float H = 0.09f;
-		lines.draw_text("Nothing here",
-			glm::vec3(-aspect + 0.1f * H, -1.0 + 0.1f * H, 0.0),
-			glm::vec3(H, 0.0f, 0.0f), glm::vec3(0.0f, H, 0.0f),
-			glm::u8vec4(0x00, 0x00, 0x00, 0x00));
-	}
+	draw_text_line(upper_text, 10.0f, 360.0f, glm::vec3{0.0f, 0.0f, 1.0f});
+	draw_text_line(lower_text, 10.0f, 180.0f, glm::vec3{});
 	GL_ERRORS();
 }

@@ -35,12 +35,13 @@ struct PlayMode : Mode {
 	Scene scene;
 
 	glm::mat4 world_to_clip;
+	glm::mat4 set_to_screen;
 
 	struct Character {
 		unsigned int id;  // ID handle of the glyph texture
-		glm::ivec2 size;       // Size of glyph
-		glm::ivec2 offset;    // Offset from baseline to left/top of glyph
-		glm::ivec2 advance;    // Offset to advance to next glyph
+		glm::uvec2 size;       // Size of glyph
+		glm::vec2 offset;    // Offset from baseline to left/top of glyph
+		glm::vec2 advance;    // Offset to advance to next glyph
 	};
 
 	std::shared_ptr< Sound::PlayingSample > rocket_loop;
@@ -51,7 +52,21 @@ struct PlayMode : Mode {
 	FT_Library ft_library;
 	hb_font_t *hb_font;
 
-	void draw_text_line(glm::vec3 color);
+	void draw_text_line(std::string text, float x, float y, glm::vec3 color);
+
+	std::string upper_text;
+	std::string lower_text;
+	struct TextState {
+		uint32_t line;
+		uint32_t choice = 1;
+		std::string text;
+		uint32_t upper = false;
+		std::vector<uint32_t> next;
+	};
+	// std::vector<TextState> lines;
+	TextState current_state;
+	// void build_lines();
+	void apply_state(uint32_t location);
 
 	//camera:
 	Scene::Camera *camera = nullptr;

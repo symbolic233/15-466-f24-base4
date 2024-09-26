@@ -57,31 +57,12 @@ Load< Sound::Sample > rocket_sample(LoadTagDefault, []() -> Sound::Sample const 
 void PlayMode::draw_text_line(glm::vec3 color) {
 	// We start by using HarfBuzz and FreeType together to shape the characters.
 	// Much of this is adapted from https://github.com/harfbuzz/harfbuzz-tutorial/blob/master/hello-harfbuzz-freetype.c
-	FT_Library ft_library;
-	FT_Init_FreeType(&ft_library);
-
-	hb_buffer_t *buf = hb_buffer_create();
-
-	std::string fontfile;
-  	std::string text;
-
-	fontfile = data_path("opensans-regular.ttf");
-	text = "Sample text part 1";
-
 	/* Initialize FreeType and create FreeType font face. */
-	FT_Face ft_face;
 	FT_Error ft_error;
+	hb_buffer_t *buf = hb_buffer_create();
+  	std::string text;
+	text = "Sampletextpart1";
 
-	if ((FT_New_Face(ft_library, fontfile.c_str(), 0, &ft_face))) {
-		throw std::runtime_error("did not find fontfile");
-	}
-	if ((FT_Set_Char_Size(ft_face, FONT_SIZE*RESCALE, FONT_SIZE*RESCALE, 0, 0))) {
-		throw std::runtime_error("could not set char size");
-	}
-
-	/* Create hb-ft font. */
-	hb_font_t *hb_font;
-	hb_font = hb_ft_font_create (ft_face, NULL);
 
 	/* Create hb-buffer and populate. */
 	hb_buffer_t *hb_buffer;
@@ -150,15 +131,10 @@ void PlayMode::draw_text_line(glm::vec3 color) {
 	// I don't need absolute positions, so we ignore that part of the HB/FT tutorial.
 
 	hb_buffer_destroy(buf);
-	hb_font_destroy (hb_font);
-	FT_Done_Face (ft_face);
-	FT_Done_FreeType (ft_library);
+	
 
 	// Draw the text.
 	glUseProgram(text_program->program);
-
-	assert(camera->transform);
-	glm::mat4 world_to_clip = camera->make_projection() * glm::mat4(camera->transform->make_world_to_local());
 
 	// set the angles
 	glUniform3f(glGetUniformLocation(text_program->program, "textColor"), color.x, color.y, color.z);
@@ -199,6 +175,9 @@ void PlayMode::draw_text_line(glm::vec3 color) {
         // now advance cursors for next glyph (note that advance was divided by rescale earlier)
         x += ch.advance.x * scale;
 		y += ch.advance.y * scale;
+
+		// Each time we use a texture, it's no longer used later
+		glDeleteTextures(1, &ch.id);
     }
     glBindVertexArray(0);
     glBindTexture(GL_TEXTURE_2D, 0);
@@ -215,6 +194,20 @@ PlayMode::PlayMode() : scene(*camera_scene) {
 	//start music loop playing:
 	// (note: position will be over-ridden in update())
 	rocket_loop = Sound::loop(*rocket_sample, 1.0f, 0.0f);
+
+	// Do some font setup
+	fontfile = data_path("opensans-regular.ttf");
+
+	FT_Init_FreeType(&ft_library);
+	if ((FT_New_Face(ft_library, fontfile.c_str(), 0, &ft_face))) {
+		throw std::runtime_error("did not find fontfile");
+	}
+	if ((FT_Set_Char_Size(ft_face, FONT_SIZE*RESCALE, FONT_SIZE*RESCALE, 0, 0))) {
+		throw std::runtime_error("could not set char size");
+	}
+
+	/* Create hb-ft font. */
+	hb_font = hb_ft_font_create (ft_face, NULL);
 
 	// Do some text texture setup
 	// Setup the textures
@@ -236,6 +229,9 @@ PlayMode::PlayMode() : scene(*camera_scene) {
 }
 
 PlayMode::~PlayMode() {
+	FT_Done_Face (ft_face);
+	FT_Done_FreeType (ft_library);
+	hb_font_destroy(hb_font);
 }
 
 bool PlayMode::handle_event(SDL_Event const &evt, glm::uvec2 const &window_size) {
@@ -327,6 +323,8 @@ void PlayMode::update(float elapsed) {
 	right.downs = 0;
 	up.downs = 0;
 	down.downs = 0;
+
+	world_to_clip = camera->make_projection() * glm::mat4(camera->transform->make_world_to_local());
 }
 
 void PlayMode::draw(glm::uvec2 const &drawable_size) {

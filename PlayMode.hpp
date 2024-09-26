@@ -3,6 +3,12 @@
 #include "Scene.hpp"
 #include "Sound.hpp"
 
+#include <ft2build.h>
+#include FT_FREETYPE_H
+
+#include <hb.h>
+#include <hb-ft.h>
+
 #include <glm/glm.hpp>
 
 #include <vector>
@@ -28,6 +34,8 @@ struct PlayMode : Mode {
 	//local copy of the game scene (so code can change it during gameplay):
 	Scene scene;
 
+	glm::mat4 world_to_clip;
+
 	struct Character {
 		unsigned int id;  // ID handle of the glyph texture
 		glm::ivec2 size;       // Size of glyph
@@ -37,10 +45,14 @@ struct PlayMode : Mode {
 
 	std::shared_ptr< Sound::PlayingSample > rocket_loop;
 
+	GLuint VAO_text, VBO_text = -1U;
+	std::string fontfile;
+	FT_Face ft_face;
+	FT_Library ft_library;
+	hb_font_t *hb_font;
+
 	void draw_text_line(glm::vec3 color);
 
-	GLuint VAO_text, VBO_text = -1U;
-	
 	//camera:
 	Scene::Camera *camera = nullptr;
 

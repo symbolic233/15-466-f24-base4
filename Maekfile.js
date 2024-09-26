@@ -40,7 +40,9 @@ if (maek.OS === "windows") {
 		`/wd4297`, //unforunately SDLmain is nothrow
 		`/wd4100`, //unreferenced formal parameter
 		`/wd4201`, //nameless struct/union
-		`/wd4611`  //interaction between setjmp and C++ object destruction
+		`/wd4611`,  //interaction between setjmp and C++ object destruction
+		// assn
+		// `/fsanitize=address`
 	);
 	maek.options.LINKLibs.push(
 		`/LIBPATH:${NEST_LIBS}/SDL2/lib`, `SDL2main.lib`, `SDL2.lib`, `OpenGL32.lib`, `Shell32.lib`,

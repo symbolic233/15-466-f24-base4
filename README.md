@@ -4,7 +4,7 @@ Author: Yoseph Mak
 
 Design: This is a game designed to teach while loops. The game's script itself loops unless you choose not to let it do so.
 
-Text Drawing: Text is not precomputed. Whenever the game is given a paragraph (draw_text_par), it splits the text into lines which are drawn separately with draw_text_line.
+Text Drawing: Text is not precomputed. Whenever the game is given a paragraph (draw_text_par), it splits the text into lines which are drawn separately with draw_text_line. Each line is at most a certain amount of characters long, but I made sure not to split up a word.
 
 When the game starts, the font library and face are initialized with FreeType, as well as a shaper with HarfBuzz. In draw_text_line, the given line is passed to HarfBuzz to be shaped. Then, I have Character structs which combine this information with FreeType glyph info. Furthermore, at this point I make new textures for the characters in OpenGL. I chose not to reuse textures because the same character could be shaped differently in different text.
 

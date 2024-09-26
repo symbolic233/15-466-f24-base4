@@ -60,7 +60,7 @@ Load< Sound::Sample > rocket_sample(LoadTagDefault, []() -> Sound::Sample const 
 });
 
 Load<std::map<uint32_t, PlayMode::TextState>> script_lines(LoadTagDefault, []() -> std::map<uint32_t, PlayMode::TextState> const * {
-	// Some file reading taken from https://stackoverflow.com/questions/7868936/read-file-line-by-line-using-ifstream-in-c
+	// Some file reading guidance from https://stackoverflow.com/questions/7868936/read-file-line-by-line-using-ifstream-in-c
 	std::map<uint32_t, PlayMode::TextState> script;
 	
 	uint32_t lnum = 1;
@@ -97,7 +97,7 @@ void PlayMode::apply_state(uint32_t location) {
 
 void PlayMode::draw_text_line(std::string text, float x, float y, glm::vec3 color) {
 	// We start by using HarfBuzz and FreeType together to shape the characters.
-	// Much of this is adapted from https://github.com/harfbuzz/harfbuzz-tutorial/blob/master/hello-harfbuzz-freetype.c
+	// Some of this is adapted from https://github.com/harfbuzz/harfbuzz-tutorial/blob/master/hello-harfbuzz-freetype.c
 	/* Initialize FreeType and create FreeType font face. */
 	FT_Error ft_error;
 	hb_buffer_t *buf = hb_buffer_create();
@@ -129,11 +129,8 @@ void PlayMode::draw_text_line(std::string text, float x, float y, glm::vec3 colo
 
 		// Now that we have the shapes of the characters, we have to use FT to get what the glyph looks like.
 		// Then we can use GL for the textures.
-		// Much of this part of the code is adapted from https://learnopengl.com/In-Practice/Text-Rendering
+		// Some of this is adapted from https://learnopengl.com/In-Practice/Text-Rendering
 		ft_error = FT_Load_Glyph(ft_face, gid, FT_LOAD_RENDER);
-		// if (ft_face->glyph->bitmap.buffer != nullptr)
-		// 	std::cout << ft_face->glyph->bitmap.buffer << std::endl;
-		// else std::cout << "<blank>" << std::endl;
 
 		unsigned int texture;
 		glGenTextures(1, &texture);
@@ -253,6 +250,7 @@ PlayMode::PlayMode() : scene(*camera_scene) {
 	set_to_screen = glm::ortho(0.0f, 960.0f, 0.0f, 540.0f);
 
 	// Do some font setup
+	// Some of the code here is adapted from the same two links from draw_text_line.
 	fontfile = data_path("OpenSans-Regular.ttf");
 
 	FT_Init_FreeType(&ft_library);

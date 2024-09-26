@@ -1,6 +1,7 @@
 #include "PlayMode.hpp"
 
 #include "LitColorTextureProgram.hpp"
+#include "TextProgram.hpp"
 
 #include "DrawLines.hpp"
 #include "Mesh.hpp"
@@ -12,23 +13,36 @@
 
 #include <random>
 
-GLuint hexapod_meshes_for_lit_color_texture_program = 0;
-Load< MeshBuffer > hexapod_meshes(LoadTagDefault, []() -> MeshBuffer const * {
+#include <ft2build.h>
+#include FT_FREETYPE_H
+
+#include <hb.h>
+#include <hb-ft.h>
+
+#include <iostream>
+#include <string>
+
+#define FONT_SIZE 36
+#define MARGIN (FONT_SIZE * .5)
+#define RESCALE 64
+
+GLuint camera_mesh_program = 0;
+Load< MeshBuffer > camera_mesh(LoadTagDefault, []() -> MeshBuffer const * {
 	MeshBuffer const *ret = new MeshBuffer(data_path("hexapod.pnct"));
-	hexapod_meshes_for_lit_color_texture_program = ret->make_vao_for_program(lit_color_texture_program->program);
+	camera_mesh_program = ret->make_vao_for_program(lit_color_texture_program->program);
 	return ret;
 });
 
-Load< Scene > hexapod_scene(LoadTagDefault, []() -> Scene const * {
+Load< Scene > camera_scene(LoadTagDefault, []() -> Scene const * {
 	return new Scene(data_path("hexapod.scene"), [&](Scene &scene, Scene::Transform *transform, std::string const &mesh_name){
-		Mesh const &mesh = hexapod_meshes->lookup(mesh_name);
+		Mesh const &mesh = camera_mesh->lookup(mesh_name);
 
 		scene.drawables.emplace_back(transform);
 		Scene::Drawable &drawable = scene.drawables.back();
 
 		drawable.pipeline = lit_color_texture_program_pipeline;
 
-		drawable.pipeline.vao = hexapod_meshes_for_lit_color_texture_program;
+		drawable.pipeline.vao = camera_mesh_program;
 		drawable.pipeline.type = mesh.type;
 		drawable.pipeline.start = mesh.start;
 		drawable.pipeline.count = mesh.count;
@@ -40,7 +54,159 @@ Load< Sound::Sample > rocket_sample(LoadTagDefault, []() -> Sound::Sample const 
 	return new Sound::Sample(data_path("rocket.wav"));
 });
 
-PlayMode::PlayMode() : scene(*hexapod_scene) {
+void PlayMode::draw_text_line(glm::vec3 color) {
+	// We start by using HarfBuzz and FreeType together to shape the characters.
+	// Much of this is adapted from https://github.com/harfbuzz/harfbuzz-tutorial/blob/master/hello-harfbuzz-freetype.c
+	FT_Library ft_library;
+	FT_Init_FreeType(&ft_library);
+
+	hb_buffer_t *buf = hb_buffer_create();
+
+	std::string fontfile;
+  	std::string text;
+
+	fontfile = data_path("opensans-regular.ttf");
+	text = "Sample text part 1";
+
+	/* Initialize FreeType and create FreeType font face. */
+	FT_Face ft_face;
+	FT_Error ft_error;
+
+	if ((FT_New_Face(ft_library, fontfile.c_str(), 0, &ft_face))) {
+		throw std::runtime_error("did not find fontfile");
+	}
+	if ((FT_Set_Char_Size(ft_face, FONT_SIZE*RESCALE, FONT_SIZE*RESCALE, 0, 0))) {
+		throw std::runtime_error("could not set char size");
+	}
+
+	/* Create hb-ft font. */
+	hb_font_t *hb_font;
+	hb_font = hb_ft_font_create (ft_face, NULL);
+
+	/* Create hb-buffer and populate. */
+	hb_buffer_t *hb_buffer;
+	hb_buffer = hb_buffer_create ();
+	hb_buffer_add_utf8 (hb_buffer, text.c_str(), -1, 0, -1);
+	hb_buffer_guess_segment_properties (hb_buffer);
+
+	/* Shape it! */
+	hb_shape (hb_font, hb_buffer, NULL, 0);
+
+	/* Get glyph information and positions out of the buffer. */
+	unsigned int len = hb_buffer_get_length (hb_buffer);
+	hb_glyph_info_t *info = hb_buffer_get_glyph_infos (hb_buffer, NULL);
+	hb_glyph_position_t *pos = hb_buffer_get_glyph_positions (hb_buffer, NULL);
+
+	std::vector<Character> text_characters;
+	/* Print them out as is. */
+	for (unsigned int i = 0; i < len; i++) {
+		hb_codepoint_t gid   = info[i].codepoint;
+		// unsigned int cluster = info[i].cluster; // unused
+		float x_advance = pos[i].x_advance / (float)RESCALE;
+		float y_advance = pos[i].y_advance / (float)RESCALE;
+		float x_offset  = pos[i].x_offset / (float)RESCALE;
+		float y_offset  = pos[i].y_offset / (float)RESCALE;
+
+		// Now that we have the shapes of the characters, we have to use FT to get what the glyph looks like.
+		// Then we can use GL for the textures.
+		// Much of this part of the code is adapted from https://learnopengl.com/In-Practice/Text-Rendering
+		ft_error = FT_Load_Glyph(ft_face, gid, FT_LOAD_RENDER);
+		// if (ft_face->glyph->bitmap.buffer != nullptr)
+		// 	std::cout << ft_face->glyph->bitmap.buffer << std::endl;
+		// else std::cout << "<blank>" << std::endl;
+
+		unsigned int texture;
+		glGenTextures(1, &texture);
+		glBindTexture(GL_TEXTURE_2D, texture);
+		// This is the main actual creation of the texture.
+		glTexImage2D(
+			GL_TEXTURE_2D,
+			0,
+			GL_RED,
+			ft_face->glyph->bitmap.width,
+			ft_face->glyph->bitmap.rows,
+			0,
+			GL_RED,
+			GL_UNSIGNED_BYTE,
+			ft_face->glyph->bitmap.buffer
+		);
+
+		// useful texture settings
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+
+		// The original code takes the offset and advance from FT, but we want the HB values.
+		Character next = {
+			texture, 
+			glm::ivec2(ft_face->glyph->bitmap.width, ft_face->glyph->bitmap.rows),
+			glm::ivec2(x_offset, y_offset),
+			glm::ivec2(x_advance, y_advance)
+		};
+		text_characters.push_back(next);
+	}
+
+	// I don't need absolute positions, so we ignore that part of the HB/FT tutorial.
+
+	hb_buffer_destroy(buf);
+	hb_font_destroy (hb_font);
+	FT_Done_Face (ft_face);
+	FT_Done_FreeType (ft_library);
+
+	// Draw the text.
+	glUseProgram(text_program->program);
+
+	assert(camera->transform);
+	glm::mat4 world_to_clip = camera->make_projection() * glm::mat4(camera->transform->make_world_to_local());
+
+	// set the angles
+	glUniform3f(glGetUniformLocation(text_program->program, "textColor"), color.x, color.y, color.z);
+	glUniformMatrix4fv(glGetUniformLocation(text_program->program, "WORLD_TO_CLIP"), 1, 0, glm::value_ptr(world_to_clip));
+    glActiveTexture(GL_TEXTURE0);
+    glBindVertexArray(VAO_text);
+
+    // iterate through all characters
+	float x = 0.0f;
+	float y = 0.0f;
+	float scale = 1.0f;
+    for (Character ch: text_characters) {
+        float xpos = x + ch.offset.x * scale;
+        float ypos = y - (ch.size.y - ch.offset.y) * scale;
+
+        float w = ch.size.x * scale;
+        float h = ch.size.y * scale;
+		// std::cout << "Drawing at " << xpos << ", " << ypos << std::endl;
+        // update VBO for each character
+		// This works because you draw two triangles for the entire quad (rectangle) of the text.
+        float vertices[6][4] = {
+            { xpos,     ypos + h,   0.0f, 0.0f},            
+            { xpos,     ypos,       0.0f, 1.0f},
+            { xpos + w, ypos,       1.0f, 1.0f},
+
+            { xpos,     ypos + h,   0.0f, 0.0f},
+            { xpos + w, ypos,       1.0f, 1.0f},
+            { xpos + w, ypos + h,   1.0f, 0.0f}           
+        };
+        // render glyph texture over quad
+        glBindTexture(GL_TEXTURE_2D, ch.id);
+        // update content of VBO memory
+        glBindBuffer(GL_ARRAY_BUFFER, VBO_text);
+        glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(vertices), vertices); 
+        glBindBuffer(GL_ARRAY_BUFFER, 0);
+        // render quad
+        glDrawArrays(GL_TRIANGLES, 0, 6);
+        // now advance cursors for next glyph (note that advance was divided by rescale earlier)
+        x += ch.advance.x * scale;
+		y += ch.advance.y * scale;
+    }
+    glBindVertexArray(0);
+    glBindTexture(GL_TEXTURE_2D, 0);
+
+	glUseProgram(0); // so we can draw other stuff
+}
+
+PlayMode::PlayMode() : scene(*camera_scene) {
 
 	//get pointer to camera for convenience:
 	if (scene.cameras.size() != 1) throw std::runtime_error("Expecting scene to have exactly one camera, but it has " + std::to_string(scene.cameras.size()));
@@ -49,6 +215,24 @@ PlayMode::PlayMode() : scene(*hexapod_scene) {
 	//start music loop playing:
 	// (note: position will be over-ridden in update())
 	rocket_loop = Sound::loop(*rocket_sample, 1.0f, 0.0f);
+
+	// Do some text texture setup
+	// Setup the textures
+	glUseProgram(text_program->program);
+	glEnable(GL_BLEND);
+	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA); 
+	glGenVertexArrays(1, &VAO_text);
+	glGenBuffers(1, &VBO_text);
+	glBindVertexArray(VAO_text);
+	glBindBuffer(GL_ARRAY_BUFFER, VBO_text);
+	// Note: sizeof(Character) should be sizeof(float) * 7
+	glBufferData(GL_ARRAY_BUFFER, sizeof(float) * 6 * 4, NULL, GL_DYNAMIC_DRAW);
+	glEnableVertexAttribArray(0);
+	glVertexAttribPointer(0, 4, GL_FLOAT, GL_FALSE, 4 * sizeof(float), 0);
+	glBindBuffer(GL_ARRAY_BUFFER, 0);
+	glBindVertexArray(0);
+
+	glUseProgram(0); // so we can draw other stuff
 }
 
 PlayMode::~PlayMode() {
@@ -138,13 +322,6 @@ void PlayMode::update(float elapsed) {
 		camera->transform->position += move.x * frame_right + move.y * frame_forward;
 	}
 
-	{ //update listener to camera position:
-		glm::mat4x3 frame = camera->transform->make_local_to_parent();
-		glm::vec3 frame_right = frame[0];
-		glm::vec3 frame_at = frame[3];
-		Sound::listener.set_position_right(frame_at, frame_right, 1.0f / 60.0f);
-	}
-
 	//reset button press counters:
 	left.downs = 0;
 	right.downs = 0;
@@ -156,12 +333,7 @@ void PlayMode::draw(glm::uvec2 const &drawable_size) {
 	//update camera aspect ratio for drawable:
 	camera->aspect = float(drawable_size.x) / float(drawable_size.y);
 
-	//set up light type and position for lit_color_texture_program:
-	// TODO: consider using the Light(s) in the scene to do this
 	glUseProgram(lit_color_texture_program->program);
-	glUniform1i(lit_color_texture_program->LIGHT_TYPE_int, 1);
-	glUniform3fv(lit_color_texture_program->LIGHT_DIRECTION_vec3, 1, glm::value_ptr(glm::vec3(0.0f, 0.0f,-1.0f)));
-	glUniform3fv(lit_color_texture_program->LIGHT_ENERGY_vec3, 1, glm::value_ptr(glm::vec3(1.0f, 1.0f, 0.95f)));
 	glUseProgram(0);
 
 	glClearColor(0.5f, 0.5f, 0.5f, 1.0f);
@@ -172,6 +344,7 @@ void PlayMode::draw(glm::uvec2 const &drawable_size) {
 	glDepthFunc(GL_LESS); //this is the default depth comparison function, but FYI you can change it.
 
 	scene.draw(*camera);
+	draw_text_line(glm::vec3{});
 
 	{ //use DrawLines to overlay some text:
 		glDisable(GL_DEPTH_TEST);
@@ -184,15 +357,10 @@ void PlayMode::draw(glm::uvec2 const &drawable_size) {
 		));
 
 		constexpr float H = 0.09f;
-		lines.draw_text("Mouse motion rotates camera; WASD moves; escape ungrabs mouse",
+		lines.draw_text("Nothing here",
 			glm::vec3(-aspect + 0.1f * H, -1.0 + 0.1f * H, 0.0),
 			glm::vec3(H, 0.0f, 0.0f), glm::vec3(0.0f, H, 0.0f),
 			glm::u8vec4(0x00, 0x00, 0x00, 0x00));
-		float ofs = 2.0f / drawable_size.y;
-		lines.draw_text("Mouse motion rotates camera; WASD moves; escape ungrabs mouse",
-			glm::vec3(-aspect + 0.1f * H + ofs, -1.0 + + 0.1f * H + ofs, 0.0),
-			glm::vec3(H, 0.0f, 0.0f), glm::vec3(0.0f, H, 0.0f),
-			glm::u8vec4(0xff, 0xff, 0xff, 0x00));
 	}
 	GL_ERRORS();
 }

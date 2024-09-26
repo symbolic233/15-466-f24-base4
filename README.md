@@ -22,7 +22,10 @@ Sources: (TODO: list a source URL for any assets you did not create yourself. Ma
 - "Rocket" by Kevin MacLeod (incompetech.com / https://incompetech.com/music/royalty-free/music.html)
     Licensed under Creative Commons: By Attribution 4.0 License
     http://creativecommons.org/licenses/by/4.0/
-- https://github.com/harfbuzz/harfbuzz-tutorial/blob/master/hello-harfbuzz-freetype.c
+
+Other credits:
+- https://github.com/harfbuzz/harfbuzz-tutorial/blob/master/hello-harfbuzz-freetype.c and in general the entire HarfBuzz tutorial repository
+- https://learnopengl.com/In-Practice/Text-Rendering for advice on getting the FreeType glyphs to work and putting them in OpenGL
 
 This game was built with [NEST](NEST.md).
 

@@ -12,8 +12,6 @@ Load< LitColorTextureProgram > lit_color_texture_program(LoadTagEarly, []() -> L
 	lit_color_texture_program_pipeline.program = ret->program;
 
 	lit_color_texture_program_pipeline.OBJECT_TO_CLIP_mat4 = ret->OBJECT_TO_CLIP_mat4;
-	lit_color_texture_program_pipeline.OBJECT_TO_LIGHT_mat4x3 = ret->OBJECT_TO_LIGHT_mat4x3;
-	lit_color_texture_program_pipeline.NORMAL_TO_LIGHT_mat3 = ret->NORMAL_TO_LIGHT_mat3;
 
 	/* This will be used later if/when we build a light loop into the Scene:
 	lit_color_texture_program_pipeline.LIGHT_TYPE_int = ret->LIGHT_TYPE_int;
@@ -70,40 +68,13 @@ LitColorTextureProgram::LitColorTextureProgram() {
 		//fragment shader:
 		"#version 330\n"
 		"uniform sampler2D TEX;\n"
-		"uniform int LIGHT_TYPE;\n"
-		"uniform vec3 LIGHT_LOCATION;\n"
-		"uniform vec3 LIGHT_DIRECTION;\n"
-		"uniform vec3 LIGHT_ENERGY;\n"
-		"uniform float LIGHT_CUTOFF;\n"
 		"in vec3 position;\n"
-		"in vec3 normal;\n"
 		"in vec4 color;\n"
 		"in vec2 texCoord;\n"
 		"out vec4 fragColor;\n"
 		"void main() {\n"
-		"	vec3 n = normalize(normal);\n"
-		"	vec3 e;\n"
-		"	if (LIGHT_TYPE == 0) { //point light \n"
-		"		vec3 l = (LIGHT_LOCATION - position);\n"
-		"		float dis2 = dot(l,l);\n"
-		"		l = normalize(l);\n"
-		"		float nl = max(0.0, dot(n, l)) / max(1.0, dis2);\n"
-		"		e = nl * LIGHT_ENERGY;\n"
-		"	} else if (LIGHT_TYPE == 1) { //hemi light \n"
-		"		e = (dot(n,-LIGHT_DIRECTION) * 0.5 + 0.5) * LIGHT_ENERGY;\n"
-		"	} else if (LIGHT_TYPE == 2) { //spot light \n"
-		"		vec3 l = (LIGHT_LOCATION - position);\n"
-		"		float dis2 = dot(l,l);\n"
-		"		l = normalize(l);\n"
-		"		float nl = max(0.0, dot(n, l)) / max(1.0, dis2);\n"
-		"		float c = dot(l,-LIGHT_DIRECTION);\n"
-		"		nl *= smoothstep(LIGHT_CUTOFF,mix(LIGHT_CUTOFF,1.0,0.1), c);\n"
-		"		e = nl * LIGHT_ENERGY;\n"
-		"	} else { //(LIGHT_TYPE == 3) //directional light \n"
-		"		e = max(0.0, dot(n,-LIGHT_DIRECTION)) * LIGHT_ENERGY;\n"
-		"	}\n"
 		"	vec4 albedo = texture(TEX, texCoord) * color;\n"
-		"	fragColor = vec4(e*albedo.rgb, albedo.a);\n"
+		"	fragColor = vec4(albedo.rgb, albedo.a);\n"
 		"}\n"
 	);
 	//As you can see above, adjacent strings in C/C++ are concatenated.
@@ -117,14 +88,6 @@ LitColorTextureProgram::LitColorTextureProgram() {
 
 	//look up the locations of uniforms:
 	OBJECT_TO_CLIP_mat4 = glGetUniformLocation(program, "OBJECT_TO_CLIP");
-	OBJECT_TO_LIGHT_mat4x3 = glGetUniformLocation(program, "OBJECT_TO_LIGHT");
-	NORMAL_TO_LIGHT_mat3 = glGetUniformLocation(program, "NORMAL_TO_LIGHT");
-
-	LIGHT_TYPE_int = glGetUniformLocation(program, "LIGHT_TYPE");
-	LIGHT_LOCATION_vec3 = glGetUniformLocation(program, "LIGHT_LOCATION");
-	LIGHT_DIRECTION_vec3 = glGetUniformLocation(program, "LIGHT_DIRECTION");
-	LIGHT_ENERGY_vec3 = glGetUniformLocation(program, "LIGHT_ENERGY");
-	LIGHT_CUTOFF_float = glGetUniformLocation(program, "LIGHT_CUTOFF");
 
 
 	GLuint TEX_sampler2D = glGetUniformLocation(program, "TEX");

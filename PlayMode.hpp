@@ -28,7 +28,18 @@ struct PlayMode : Mode {
 	//local copy of the game scene (so code can change it during gameplay):
 	Scene scene;
 
+	struct Character {
+		unsigned int id;  // ID handle of the glyph texture
+		glm::ivec2 size;       // Size of glyph
+		glm::ivec2 offset;    // Offset from baseline to left/top of glyph
+		glm::ivec2 advance;    // Offset to advance to next glyph
+	};
+
 	std::shared_ptr< Sound::PlayingSample > rocket_loop;
+
+	void draw_text_line(glm::vec3 color);
+
+	GLuint VAO_text, VBO_text = -1U;
 	
 	//camera:
 	Scene::Camera *camera = nullptr;

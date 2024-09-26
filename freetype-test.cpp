@@ -26,11 +26,11 @@ int main(int argc, char **argv) {
   	std::string text;
 
 	fontfile = data_path("dist/opensans-regular.ttf");
-	text = "Sample text 1";
+	text = "Sample text part 1";
 
 	/* Initialize FreeType and create FreeType font face. */
 	FT_Face ft_face;
-	// FT_Error ft_error;
+	FT_Error ft_error;
 
 	std::cout << "setup..." << std::endl;
 
@@ -96,7 +96,12 @@ int main(int argc, char **argv) {
 			char glyphname[32];
 			hb_font_get_glyph_name (hb_font, gid, glyphname, sizeof (glyphname));
 
-			std::cout << "glpyh='" << glyphname << "' ";
+			ft_error = FT_Load_Glyph(ft_face, gid, FT_LOAD_RENDER);
+			if (ft_face->glyph->bitmap.buffer != nullptr)
+				std::cout << ft_face->glyph->bitmap.buffer << std::endl;
+			else std::cout << "<blank>" << std::endl;
+
+			std::cout << "glyph='" << glyphname << "' ";
 			std::cout << "cluster=" << cluster << "  ";
 			std::cout << "position=(" << x_position << "," << y_position << ")" << " ";
 			std::cout << std::endl;

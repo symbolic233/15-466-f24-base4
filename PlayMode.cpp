@@ -158,7 +158,7 @@ void PlayMode::draw_text_line(std::string text, float x, float y, glm::vec3 colo
 		Character next = {
 			texture, 
 			glm::uvec2(ft_face->glyph->bitmap.width, ft_face->glyph->bitmap.rows),
-			glm::vec2(x_offset, y_offset),
+			glm::vec2(x_offset + (float)ft_face->glyph->bitmap_left, y_offset + (float)ft_face->glyph->bitmap_top),
 			glm::vec2(x_advance, y_advance)
 		};
 		text_characters.push_back(next);
@@ -181,7 +181,7 @@ void PlayMode::draw_text_line(std::string text, float x, float y, glm::vec3 colo
 	glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
     for (Character ch: text_characters) {
         float xpos = x + ch.offset.x * scale;
-        float ypos = y + ch.offset.y * scale;
+        float ypos = y - (ch.size.y - ch.offset.y) * scale;
 
         float w = ch.size.x * scale;
         float h = ch.size.y * scale;

@@ -36,6 +36,7 @@ TextProgram::TextProgram() {
         "}\n"  
 	,
 		//fragment shader:
+		"#version 330\n"
 		"in vec2 TexCoords;\n"
         "out vec4 color;\n"
         "uniform sampler2D text;\n"
